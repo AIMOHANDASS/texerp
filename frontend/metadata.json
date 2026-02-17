@@ -1,0 +1,8 @@
+
+{
+  "name": "TexFlow - Integrated Textile Management System",
+  "description": "A comprehensive full-stack prototype for textile businesses, managing inventory, sales, purchases, e-commerce, and analytics with AI-powered insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
