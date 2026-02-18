@@ -5,6 +5,9 @@
     "esModuleInterop": true,
     "moduleResolution": "node",
     "strict": false,
-    "skipLibCheck": true
-  }
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "."
+  },
+  "include": ["server.ts"]
 }

@@ -1,4 +1,3 @@
-
 import { Product, Transaction, Supplier, Customer, Category, User } from '../types';
 
 const BASE_URL = 'http://localhost:5000/api';
@@ -20,6 +19,15 @@ const MOCK_PRODUCTS: Product[] = [
 
 const MOCK_SUPPLIERS: Supplier[] = [{ id: 'ms1', name: 'Local Fabrics Co', contactPerson: 'John Doe', phone: '1234567890', email: 'contact@localfabrics.com' }];
 const MOCK_CUSTOMERS: Customer[] = [{ id: 'mc1', name: 'Walk-in Customer', phone: '9999999999', email: 'walkin@example.com' }];
+
+
+const normalizeId = <T extends { id?: string; _id?: string }>(item: T): T & { id: string } => ({
+  ...item,
+  id: item.id || item._id || ''
+});
+
+const normalizeList = <T extends { id?: string; _id?: string }>(items: T[]): Array<T & { id: string }> =>
+  (items || []).map(normalizeId).filter(item => Boolean(item.id));
 
 const hybridRequest = async (url: string, key: string, defaultValue: any, options?: RequestInit) => {
   try {
@@ -96,7 +104,8 @@ export const api = {
   },
 
   getProducts: async (): Promise<Product[]> => {
-    return hybridRequest(`${BASE_URL}/products`, STORAGE_KEYS.PRODUCTS, MOCK_PRODUCTS);
+    const data = await hybridRequest(`${BASE_URL}/products`, STORAGE_KEYS.PRODUCTS, MOCK_PRODUCTS);
+    return normalizeList(data) as Product[];
   },
 
   saveProduct: async (product: Partial<Product>) => {
@@ -138,7 +147,8 @@ export const api = {
   },
 
   getTransactions: async (): Promise<Transaction[]> => {
-    return hybridRequest(`${BASE_URL}/transactions`, STORAGE_KEYS.TRANSACTIONS, []);
+    const data = await hybridRequest(`${BASE_URL}/transactions`, STORAGE_KEYS.TRANSACTIONS, []);
+    return normalizeList(data) as Transaction[];
   },
 
   addTransaction: async (transaction: Partial<Transaction>) => {
@@ -169,36 +179,61 @@ export const api = {
   },
 
   getSuppliers: async (): Promise<Supplier[]> => {
-    return hybridRequest(`${BASE_URL}/suppliers`, STORAGE_KEYS.SUPPLIERS, MOCK_SUPPLIERS);
+    const data = await hybridRequest(`${BASE_URL}/suppliers`, STORAGE_KEYS.SUPPLIERS, MOCK_SUPPLIERS);
+    return normalizeList(data) as Supplier[];
   },
 
   saveSupplier: async (supplier: Partial<Supplier>) => {
     const localSupps = await api.getSuppliers();
-    if (supplier.id) {
+    const isUpdate = Boolean(supplier.id);
+    const method = isUpdate ? 'PATCH' : 'POST';
+    const url = isUpdate ? `${BASE_URL}/suppliers/${supplier.id}` : `${BASE_URL}/suppliers`;
+
+    let optimistic: Supplier;
+    if (isUpdate) {
       const idx = localSupps.findIndex(s => s.id === supplier.id);
-      if (idx > -1) localSupps[idx] = { ...localSupps[idx], ...supplier } as Supplier;
+      optimistic = { ...(localSupps[idx] || {} as Supplier), ...supplier } as Supplier;
+      if (idx > -1) localSupps[idx] = optimistic;
     } else {
-      localSupps.push({ ...supplier, id: `supp-${Date.now()}` } as Supplier);
+      optimistic = { ...supplier, id: `supp-${Date.now()}` } as Supplier;
+      localSupps.unshift(optimistic);
     }
     localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(localSupps));
-    return supplier;
+
+    const saved = await hybridRequest(url, STORAGE_KEYS.SUPPLIERS, optimistic, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(supplier),
+    });
+    return normalizeId(saved) as Supplier;
   },
 
   getCustomers: async (): Promise<Customer[]> => {
-    return hybridRequest(`${BASE_URL}/customers`, STORAGE_KEYS.CUSTOMERS, MOCK_CUSTOMERS);
+    const data = await hybridRequest(`${BASE_URL}/customers`, STORAGE_KEYS.CUSTOMERS, MOCK_CUSTOMERS);
+    return normalizeList(data) as Customer[];
   },
 
   saveCustomer: async (customer: Partial<Customer>) => {
     const localCusts = await api.getCustomers();
-    const newCust = { ...customer, id: customer.id || `cust-${Date.now()}` } as Customer;
-    if (customer.id) {
+    const isUpdate = Boolean(customer.id);
+    const method = isUpdate ? 'PATCH' : 'POST';
+    const url = isUpdate ? `${BASE_URL}/customers/${customer.id}` : `${BASE_URL}/customers`;
+
+    const optimistic = { ...customer, id: customer.id || `cust-${Date.now()}` } as Customer;
+    if (isUpdate) {
       const idx = localCusts.findIndex(c => c.id === customer.id);
-      if (idx > -1) localCusts[idx] = newCust;
+      if (idx > -1) localCusts[idx] = optimistic;
     } else {
-      localCusts.push(newCust);
+      localCusts.unshift(optimistic);
     }
     localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(localCusts));
-    return newCust;
+
+    const saved = await hybridRequest(url, STORAGE_KEYS.CUSTOMERS, optimistic, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customer),
+    });
+    return normalizeId(saved) as Customer;
   },
 
   downloadReport: (type: string, data: any[]) => {
